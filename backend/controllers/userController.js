@@ -31,7 +31,7 @@ const loginUser = async (req, res) => {
     }
 
     const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, {
-      expiresIn: "7d",
+      expiresIn: "30d",
     });
 
     user.token = token;
@@ -39,7 +39,9 @@ const loginUser = async (req, res) => {
 
     return res
       .status(200)
-      .json({ message: "Login successful", token, userId: user._id });
+      .json({
+        success:true,
+        message: "Login successful", token, userId: user._id });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ message: "Server error", error });
@@ -55,15 +57,30 @@ const addMemberToGroup = async (req, res) => {
     return res.status(400).json({ message: "User name is required" });
   }
 
-  const{ groupId } = req.params;
-  const newUser = new User({ name: userName, groupId: groupId });
+  const exixtUser= await User.findOne({name:userName});
+  if(exixtUser){
+    return res.status(400).json({ message: "User already exist" })
+  };
+
+  console.log("User Object:", req.user);
+  console.log("Active Group ID:", req.user?.activeGroupId);
+  
+  const groupId  = req.user.activeGroupId;
+  
+  const newUser = new User({ name: userName, });
   await newUser.save();
 
   const group = await Group.findById(groupId);
+     console.log(group);
   group.groupMembers.push(newUser._id);
   await group.save();
 
+  newUser.groupIds.push(groupId);
+  newUser.activeGroupId =groupId;
+
+  newUser.save();
   return res.status(201).json({
+    success:true,
     message: "New user added to the group successfully",
     newUser,
   });
@@ -75,7 +92,7 @@ const addExpense = async (req, res) => {
   try {
     const { title, expenseBy, expenseAmount, expenseFor } = req.body;
 
-    const {groupId} = req.params;
+    const groupId = req.user.activeGroupId;
 
       console.log("group id is:" + groupId);
 
@@ -98,7 +115,7 @@ const addExpense = async (req, res) => {
     }
 
     // Validate expenseBy (payer)
-    const payer = await User.findOne({ name: expenseBy, groupId });
+    const payer = await User.findOne({ name: expenseBy, activeGroupId: groupId });
     if (!payer) {
       return res.status(404).json({ message: "Payer not found" });
     }
@@ -167,11 +184,50 @@ const addExpense = async (req, res) => {
 
     return res
       .status(201)
-      .json({ message: "Expense added successfully", newExpense });
+      .json({ success:true, message: "Expense added successfully", newExpense });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ message: "Server error", error });
   }
 };
 
-export { addMemberToGroup, addExpense, loginUser };
+
+
+// Take Overview of all the expenses
+
+const takeOverView = async (req, res) => {
+  try {
+    const groupId = req.user.activeGroupId;
+    const group = await Group.findById(groupId).populate("groupMembers");
+    if (!group) {
+      return res.status(404).json({ message: "Group not found" });
+    }
+
+    return res.status(200).json({ success:true, users: group.groupMembers });
+  }catch(error){
+    console.error(error);
+    return res.status(500).json({ message: "Server error", error });
+  }
+};
+
+
+
+// List expenses
+
+const listExpenses = async (req, res) => {
+  try {
+    const groupId = req.user.activeGroupId;
+    const group = await Group.findById(groupId).populate("expenses");
+    if (!group) {
+      return res.status(404).json({ message: "Group not found" });
+    }
+
+    return res.status(200).json({success:true,  expenses: group.expenses });
+  }
+  catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: "Server error", error });
+  } 
+};
+
+export { addMemberToGroup, addExpense, loginUser,takeOverView, listExpenses };

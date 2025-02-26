@@ -3,21 +3,20 @@ import { useNavigate } from "react-router-dom";
 import axios from "axios";
 
 export default function LoginPage() {
-  const [username, setUsername] = useState("");
+  const [name, setName] = useState("");
   const [password, setPassword] = useState("");
   const [group, setGroup] = useState(null);
   const navigate = useNavigate();
 
   const handleLogin = async () => {
     try {
-      const response = await axios.post("http://localhost:4000/login", {
-        username,
+      const response = await axios.post("http://localhost:4000/api/users/login", {
+        name,
         password,
-        group,
       });
       if (response.data.success) {
         navigate(`/${response.data.userId}`);
-        localStorage.setItem("userId", response.data.userId);
+        localStorage.setItem("token", response.data.token);
       } else {
         alert("Login failed! Please check your credentials.");
       }
@@ -36,8 +35,8 @@ export default function LoginPage() {
           <input
             type="text"
             className="w-full p-2 border border-gray-300 rounded mt-1"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
             required={true}
           />
         </div>
