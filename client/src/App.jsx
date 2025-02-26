@@ -4,10 +4,10 @@ import Group from "./pages/Group";
 import Login from "./pages/Login";
 function App() {
   return (
-    <div>
+    <div className="bg-black h-full w-full">
       <Router>
         <Routes>
-          <Route path="/" element={<Dashboard />} />
+          <Route path="/:id" element={<Dashboard />} />
           <Route path="/group/:id" element={<Group />} />
           <Route path="/login" element={<Login />} />
         </Routes>
