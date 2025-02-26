@@ -6,6 +6,7 @@ import connetToDB from "./config/db.js";
 import groupRouter from "./routes/groupRoutes.js";
 import userRouter from "./routes/userRoutes.js";
 const app = express();
+
 dotenv.config();
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
