@@ -1,6 +1,53 @@
 import User from "../models/userModel.js";
 import Group from "../models/groupModel.js";
 import Expense from "../Models/expenseModel.js";
+import jwt from "jsonwebtoken";
+import bcrypt from "bcryptjs";
+
+// Login or register a user
+
+const loginUser = async (req, res) => {
+  try {
+    const { name, password } = req.body;
+
+    if (!name || !password) {
+      return res
+        .status(400)
+        .json({ message: "Username and password required" });
+    }
+
+    let user = await User.findOne({ name });
+
+    if (!user) {
+      const hashedPassword = await bcrypt.hash(password, 10);
+
+      user = new User({ name, password: hashedPassword, groupIds: [] });
+      await user.save();
+    } else {
+      const isMatch = await bcrypt.compare(password, user.password);
+      if (!isMatch) {
+        return res.status(401).json({ message: "Invalid credentials" });
+      }
+    }
+
+    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, {
+      expiresIn: "7d",
+    });
+
+    user.token = token;
+    await user.save();
+
+    return res
+      .status(200)
+      .json({ message: "Login successful", token, userId: user._id });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: "Server error", error });
+  }
+};
+
+// add member to group
+
 const addMemberToGroup = async (req, res) => {
   const { userName } = req.body;
 
@@ -8,7 +55,7 @@ const addMemberToGroup = async (req, res) => {
     return res.status(400).json({ message: "User name is required" });
   }
 
-  const groupId = req.session.user.groupId;
+  const{ groupId } = req.params;
   const newUser = new User({ name: userName, groupId: groupId });
   await newUser.save();
 
@@ -22,20 +69,23 @@ const addMemberToGroup = async (req, res) => {
   });
 };
 
-
 // Adding an expense BY a user TO other users
 
- const addExpense = async (req, res) => {
+const addExpense = async (req, res) => {
   try {
     const { title, expenseBy, expenseAmount, expenseFor } = req.body;
-    const groupId = req.session?.user?.groupId; 
 
-if (!groupId) {
-  return res.status(400).json({ message: "User session or groupId is missing" });
-}
+    const {groupId} = req.params;
 
+      console.log("group id is:" + groupId);
 
-    console.log( "group id is:" +  groupId);
+    if (!groupId) {
+      return res
+        .status(400)
+        .json({ message: "User session or groupId is missing" });
+    }
+
+    console.log("group id is:" + groupId);
 
     if (!expenseBy || !expenseAmount) {
       return res.status(400).json({ message: "Add payee and amount both" });
@@ -73,10 +123,10 @@ if (!groupId) {
     }
 
     // Calculate split amount
-    const splitAmount = expenseAmount / splitAmong.length ;
+    const splitAmount = expenseAmount / splitAmong.length;
 
     // Update payer (positive balance)
-    payer.explited_amount +=(expenseAmount-splitAmount);
+    payer.explited_amount += expenseAmount - splitAmount;
 
     // Update debt for each participant
     for (let user of splitAmong) {
@@ -110,9 +160,9 @@ if (!groupId) {
     });
 
     await newExpense.save();
- 
+
     group.expenses.push(newExpense._id);
- 
+
     await group.save();
 
     return res
@@ -124,4 +174,4 @@ if (!groupId) {
   }
 };
 
-export { addMemberToGroup, addExpense };
+export { addMemberToGroup, addExpense, loginUser };

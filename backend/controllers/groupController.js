@@ -1,32 +1,24 @@
 import Group from "../Models/groupModel.js";
-import User from "../Models/userModel.js";
 
 const createGroup = async (req, res) => {
   try {
-    const { groupName, userName } = req.body;
+    const { groupName} = req.body;
 
-    if (!groupName || !userName) {
-      return res.status(400).json({ message: "Group name and at least one member are required" });
+    const user= req.user;
+     console.log(user);
+    if (!groupName ) {
+      return res.status(400).json({ message: "Enter Group Name" });
     }
-
-    const newUser = new User({ name: userName });
-    await newUser.save();
 
     const newGroup = new Group({
       name: groupName,
-      groupMembers: [newUser._id],
+      groupMembers: [user._id],
     });
     await newGroup.save();
 
-    newUser.groupIds.push(newGroup._id);
-    newUser.activeGroupId = newGroup._id;
-    await newUser.save();
-
-    req.session.user = {
-      id: newUser._id,
-      name: newUser.name,
-      groupId: newUser.groupId,
-    };
+    user.groupIds.push(newGroup._id);
+    user.activeGroupId = newGroup._id;
+    await user.save();
 
     await newGroup.populate("groupMembers");
 

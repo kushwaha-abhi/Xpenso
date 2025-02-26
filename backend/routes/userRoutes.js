@@ -1,7 +1,9 @@
 import express from 'express';
-import { addMemberToGroup, addExpense } from '../controllers/userController.js';
-const  userRouter = express.Router();   
+import authMiddleware from '../middlewares/auth.js';
+import { addMemberToGroup, addExpense, loginUser } from '../controllers/userController.js';
 
-userRouter.post('/addMember', addMemberToGroup);
-userRouter.post('/addExpense', addExpense);
+const  userRouter = express.Router();   
+userRouter.post("/login", loginUser);
+userRouter.post('/addMember/:groupId', addMemberToGroup);
+userRouter.post('/addExpense/:groupId', addExpense);
 export default userRouter;
