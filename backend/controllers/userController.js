@@ -4,7 +4,6 @@ import Expense from "../Models/expenseModel.js";
 import Payment from "../Models/paymentsModel.js";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
-import e from "express";
 
 // Login or register a user
 
@@ -246,15 +245,15 @@ const makePayment = async (req, res) => {
     if (!payerName || !recieverName || !amount) {
       return res.status(400).json({ message: "All fields are required" });
     }
-    
+
     const payer = await User.findOne({ name: payerName });
     console.log("Payer:", payer);
     if (!payer) {
       return res.status(404).json({ message: "Payer not found" });
     }
-    
+
     const reciever = await User.findOne({ name: recieverName });
-    console.log("Reciever:", reciever);
+
     if (!reciever) {
       return res.status(404).json({ message: "Receiver not found" });
     }
@@ -269,10 +268,10 @@ const makePayment = async (req, res) => {
 
     await newPayment.save();
 
-    
-    let existingPayee = payer.payees.find((payee) => payee.name.toLowerCase() === recieverName.toLowerCase());
+    let existingPayee = payer.payees.find(
+      (payee) => payee.name.toLowerCase() === recieverName.toLowerCase()
+    );
 
-    
     console.log("Existing Payee:", existingPayee);
 
     if (existingPayee) {
@@ -280,38 +279,61 @@ const makePayment = async (req, res) => {
         let remainingAmount = amount - existingPayee.amount;
 
         // Remove settled debt from payer
-        payer.payees = payer.payees.filter((payee) => payee.name !== recieverName);
+        payer.payees = payer.payees.filter(
+          (payee) => payee.name !== recieverName
+        );
 
         // Add remaining debt to receiver
         reciever.payees.push({ name: payerName, amount: remainingAmount });
 
         // Update balances
-        reciever.explited_amount -= remainingAmount;
-        payer.explited_amount += remainingAmount;
+        reciever.explited_amount = - remainingAmount;
+        payer.explited_amount = remainingAmount;
+
+        
+
       } else {
         let remainingAmount = existingPayee.amount - amount;
         existingPayee.amount = remainingAmount;
 
         // Remove payee if fully settled
         if (existingPayee.amount === 0) {
-          payer.payees = payer.payees.filter((payee) => payee.name !== recieverName);
+          payer.payees = payer.payees.filter(
+            (payee) => payee.name !== recieverName
+          );
         }
 
         // Update balances
         reciever.explited_amount -= amount;
-        payer.explited_amount += amount;
+        payer.explited_amount += Number(amount);
       }
     } else {
       // If no previous record, add new entry
-      reciever.payees.push({ name: payerName, amount: Number(amount) });
-      reciever.explited_amount = Number(reciever.explited_amount) - Number(amount);
-      payer.explited_amount = Number(payer.explited_amount) + Number(amount);
-      
-    }
+      const existing = reciever.payees.find(
+        (payee) => payee.name.toLowerCase() === payerName.toLowerCase()
+      );
 
+      console.log("Existing :", existing);
+
+      if (existing) {
+        existing.amount = Number(existing.amount) + Number(amount);
+        reciever.explited_amount =
+          Number(reciever.explited_amount || 0) - Number(amount);
+        payer.explited_amount =
+          Number(payer.explited_amount || 0) + Number(amount);
+
+        reciever.markModified("payees"); // Ensure changes are recognized
+      } else {
+        reciever.payees.push({ name: payerName, amount: Number(amount) });
+        reciever.explited_amount =
+          Number(reciever.explited_amount || 0) - Number(amount);
+        payer.explited_amount =
+          Number(payer.explited_amount || 0) + Number(amount);
+      }
+    }
     // Save updated users
-    await payer.save();
     await reciever.save();
+    await payer.save();
 
     // Save payment reference in group
     group.payments.push(newPayment._id);
@@ -327,7 +349,6 @@ const makePayment = async (req, res) => {
     return res.status(500).json({ message: "Server error", error });
   }
 };
-
 
 //Get payments
 
