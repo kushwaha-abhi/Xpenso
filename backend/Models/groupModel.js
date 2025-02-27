@@ -23,7 +23,7 @@ const groupSchema = new mongoose.Schema({
   }],
   payments: [{
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Expense',
+    ref: 'Payment',
   }],
    inviteCode:{
     type:"String",

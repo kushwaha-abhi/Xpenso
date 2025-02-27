@@ -355,16 +355,29 @@ const makePayment = async (req, res) => {
 const getPayments = async (req, res) => {
   try {
     const groupId = req.user.activeGroupId;
-    const group = await Group.findById(groupId).populate("payments");
+    console.log("Group ID:", groupId);
+
+    if (!groupId) {
+      return res.status(400).json({ message: "No active group found" });
+    }
+
+    const group = await Group.findById(groupId).populate("payments").exec();
+
+    console.log("group is:" , group);
+    
     if (!group) {
       return res.status(404).json({ message: "Group not found" });
     }
+
+    console.log("Payments found:", group.payments); // Debugging
+
     return res.status(200).json({ success: true, payments: group.payments });
   } catch (error) {
-    console.error(error);
+    console.error("Error fetching payments:", error);
     return res.status(500).json({ message: "Server error", error });
   }
 };
+
 
 export {
   addMemberToGroup,
