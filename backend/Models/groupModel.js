@@ -21,6 +21,10 @@ const groupSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Expense',
   }],
+  payments: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Expense',
+  }],
    inviteCode:{
     type:"String",
     default:generateInviteCode,

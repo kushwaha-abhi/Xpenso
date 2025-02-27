@@ -13,7 +13,7 @@ const userSchema = new mongoose.Schema({
   },
   explited_amount: {
     type: Number,
-    default: 0.0,
+    default:0,
   },
   payees: [
     {
@@ -22,6 +22,7 @@ const userSchema = new mongoose.Schema({
       },
       amount: {
         type: Number,
+        default: 0,
       },
     },
   ],

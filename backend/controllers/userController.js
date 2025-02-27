@@ -1,8 +1,10 @@
 import User from "../models/userModel.js";
 import Group from "../models/groupModel.js";
 import Expense from "../Models/expenseModel.js";
+import Payment from "../Models/paymentsModel.js";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
+import e from "express";
 
 // Login or register a user
 
@@ -37,11 +39,12 @@ const loginUser = async (req, res) => {
     user.token = token;
     await user.save();
 
-    return res
-      .status(200)
-      .json({
-        success:true,
-        message: "Login successful", token, userId: user._id });
+    return res.status(200).json({
+      success: true,
+      message: "Login successful",
+      token,
+      userId: user._id,
+    });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ message: "Server error", error });
@@ -57,30 +60,30 @@ const addMemberToGroup = async (req, res) => {
     return res.status(400).json({ message: "User name is required" });
   }
 
-  const exixtUser= await User.findOne({name:userName});
-  if(exixtUser){
-    return res.status(400).json({ message: "User already exist" })
-  };
+  const exixtUser = await User.findOne({ name: userName });
+  if (exixtUser) {
+    return res.status(400).json({ message: "User already exist" });
+  }
 
   console.log("User Object:", req.user);
   console.log("Active Group ID:", req.user?.activeGroupId);
-  
-  const groupId  = req.user.activeGroupId;
-  
-  const newUser = new User({ name: userName, });
+
+  const groupId = req.user.activeGroupId;
+
+  const newUser = new User({ name: userName });
   await newUser.save();
 
   const group = await Group.findById(groupId);
-     console.log(group);
+  console.log(group);
   group.groupMembers.push(newUser._id);
   await group.save();
 
   newUser.groupIds.push(groupId);
-  newUser.activeGroupId =groupId;
+  newUser.activeGroupId = groupId;
 
   newUser.save();
   return res.status(201).json({
-    success:true,
+    success: true,
     message: "New user added to the group successfully",
     newUser,
   });
@@ -94,7 +97,7 @@ const addExpense = async (req, res) => {
 
     const groupId = req.user.activeGroupId;
 
-      console.log("group id is:" + groupId);
+    console.log("group id is:" + groupId);
 
     if (!groupId) {
       return res
@@ -115,7 +118,10 @@ const addExpense = async (req, res) => {
     }
 
     // Validate expenseBy (payer)
-    const payer = await User.findOne({ name: expenseBy, activeGroupId: groupId });
+    const payer = await User.findOne({
+      name: expenseBy,
+      activeGroupId: groupId,
+    });
     if (!payer) {
       return res.status(404).json({ message: "Payer not found" });
     }
@@ -182,16 +188,16 @@ const addExpense = async (req, res) => {
 
     await group.save();
 
-    return res
-      .status(201)
-      .json({ success:true, message: "Expense added successfully", newExpense });
+    return res.status(201).json({
+      success: true,
+      message: "Expense added successfully",
+      newExpense,
+    });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ message: "Server error", error });
   }
 };
-
-
 
 // Take Overview of all the expenses
 
@@ -203,14 +209,12 @@ const takeOverView = async (req, res) => {
       return res.status(404).json({ message: "Group not found" });
     }
 
-    return res.status(200).json({ success:true, users: group.groupMembers });
-  }catch(error){
+    return res.status(200).json({ success: true, users: group.groupMembers });
+  } catch (error) {
     console.error(error);
     return res.status(500).json({ message: "Server error", error });
   }
 };
-
-
 
 // List expenses
 
@@ -222,12 +226,131 @@ const listExpenses = async (req, res) => {
       return res.status(404).json({ message: "Group not found" });
     }
 
-    return res.status(200).json({success:true,  expenses: group.expenses });
-  }
-  catch (error) {
+    return res.status(200).json({ success: true, expenses: group.expenses });
+  } catch (error) {
     console.error(error);
     return res.status(500).json({ message: "Server error", error });
-  } 
+  }
 };
 
-export { addMemberToGroup, addExpense, loginUser,takeOverView, listExpenses };
+// make payments
+const makePayment = async (req, res) => {
+  try {
+    const { payerName, recieverName, amount } = req.body;
+
+    const groupId = req.user.activeGroupId;
+    if (!groupId) {
+      return res.status(400).json({ message: "Group not found" });
+    }
+    const group = await Group.findById(groupId);
+    if (!payerName || !recieverName || !amount) {
+      return res.status(400).json({ message: "All fields are required" });
+    }
+    
+    const payer = await User.findOne({ name: payerName });
+    console.log("Payer:", payer);
+    if (!payer) {
+      return res.status(404).json({ message: "Payer not found" });
+    }
+    
+    const reciever = await User.findOne({ name: recieverName });
+    console.log("Reciever:", reciever);
+    if (!reciever) {
+      return res.status(404).json({ message: "Receiver not found" });
+    }
+
+    const newPayment = new Payment({
+      amount,
+      payer: payer._id,
+      reciever: reciever._id,
+      description: "Payment",
+      date: new Date(),
+    });
+
+    await newPayment.save();
+
+    
+    let existingPayee = payer.payees.find((payee) => payee.name.toLowerCase() === recieverName.toLowerCase());
+
+    
+    console.log("Existing Payee:", existingPayee);
+
+    if (existingPayee) {
+      if (amount > existingPayee.amount) {
+        let remainingAmount = amount - existingPayee.amount;
+
+        // Remove settled debt from payer
+        payer.payees = payer.payees.filter((payee) => payee.name !== recieverName);
+
+        // Add remaining debt to receiver
+        reciever.payees.push({ name: payerName, amount: remainingAmount });
+
+        // Update balances
+        reciever.explited_amount -= remainingAmount;
+        payer.explited_amount += remainingAmount;
+      } else {
+        let remainingAmount = existingPayee.amount - amount;
+        existingPayee.amount = remainingAmount;
+
+        // Remove payee if fully settled
+        if (existingPayee.amount === 0) {
+          payer.payees = payer.payees.filter((payee) => payee.name !== recieverName);
+        }
+
+        // Update balances
+        reciever.explited_amount -= amount;
+        payer.explited_amount += amount;
+      }
+    } else {
+      // If no previous record, add new entry
+      reciever.payees.push({ name: payerName, amount: Number(amount) });
+      reciever.explited_amount = Number(reciever.explited_amount) - Number(amount);
+      payer.explited_amount = Number(payer.explited_amount) + Number(amount);
+      
+    }
+
+    // Save updated users
+    await payer.save();
+    await reciever.save();
+
+    // Save payment reference in group
+    group.payments.push(newPayment._id);
+    await group.save();
+
+    return res.status(201).json({
+      success: true,
+      message: "Payment made successfully",
+      newPayment,
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: "Server error", error });
+  }
+};
+
+
+//Get payments
+
+const getPayments = async (req, res) => {
+  try {
+    const groupId = req.user.activeGroupId;
+    const group = await Group.findById(groupId).populate("payments");
+    if (!group) {
+      return res.status(404).json({ message: "Group not found" });
+    }
+    return res.status(200).json({ success: true, payments: group.payments });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: "Server error", error });
+  }
+};
+
+export {
+  addMemberToGroup,
+  addExpense,
+  loginUser,
+  takeOverView,
+  listExpenses,
+  makePayment,
+  getPayments,
+};
